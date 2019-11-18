@@ -13,23 +13,21 @@ public enum MessageDigestError: Error {
     case unknownDigest
 }
 
+let staticInitializerToken: Int = {
+  OpenSSL_add_all_digests()
+  return 0
+}()
+
 public final class MessageDigest {
-    static var addedAllDigests = false
     let messageDigest: UnsafeMutablePointer<EVP_MD>
-    
 
     public init(_ messageDigest: String) throws {
-        if !MessageDigest.addedAllDigests {
-            #if !os(Linux)
-            OpenSSL_add_all_digests()
-            #endif
-            MessageDigest.addedAllDigests = true
-        }
-        
+        #if !os(Linux)
+          _ = staticInitializerToken
+        #endif
         guard let messageDigest = messageDigest.withCString({EVP_get_digestbyname($0)}) else {
             throw MessageDigestError.unknownDigest
         }
-        
         self.messageDigest = UnsafeMutablePointer(mutating: messageDigest)
     }
 }
