@@ -14,7 +14,9 @@ public enum MessageDigestError: Error {
 }
 
 let staticInitializerToken: Int = {
+#if !os(Linux)
   OpenSSL_add_all_digests()
+#endif
   return 0
 }()
 
