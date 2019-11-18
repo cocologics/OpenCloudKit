@@ -15,8 +15,7 @@ enum CKOperationType {
 }
 
 public class CloudKit {
-
-    public var environment: CKEnvironment = .development
+    public var defaultEnvironment: CKEnvironment = .development
 
     public var defaultAccount: CKAccount!
 
@@ -36,6 +35,7 @@ public class CloudKit {
     public func configure(with configuration: CKConfig) {
         self.containers = configuration.containers
 
+        self.defaultEnvironment = containers.first?.environment ?? .development
         // Setup DefaultAccount
         let container = self.containers.first!
         if let serverAuth = container.serverToServerKeyAuth {
@@ -75,7 +75,7 @@ public class CloudKit {
     public func registerForRemoteNotifications() {
 
         // Setup Create Token Operation
-        let createTokenOperation = CKTokenCreateOperation(apnsEnvironment: environment)
+        let createTokenOperation = CKTokenCreateOperation(apnsEnvironment: defaultEnvironment)
         createTokenOperation.createTokenCompletionBlock = {
             (info, error) in
 
