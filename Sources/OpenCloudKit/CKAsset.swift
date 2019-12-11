@@ -13,7 +13,7 @@ public class CKAsset: NSObject {
     public var fileURL : URL
     
     var recordKey: String?
-    
+    var fileChecksum: String?
     var uploaded: Bool = false
     
     var downloaded: Bool = false
@@ -45,21 +45,22 @@ public class CKAsset: NSObject {
     }
     
     init?(dictionary: [String: Any]) {
-        
-        guard
-        let downloadURL = dictionary["downloadURL"] as? String,
-        let size = dictionary["size"] as? NSNumber
-        else  {
+        guard let size = dictionary["size"] as? NSNumber else {
             return nil
         }
-       
+      if let downloadURL = dictionary["downloadURL"] as? String {
         let downloadURLString = downloadURL.addingPercentEncoding(withAllowedCharacters: CharacterSet.urlQueryAllowed)!
 
         fileURL = URL(string: downloadURLString)!
         self.downloadBaseURL = downloadURL
-        self.size = size.uintValue
-        downloaded = false
-
+      } else {
+        // TODO: this does not work as expected
+        fileURL = URL(fileURLWithPath: "")
+      }
+      self.size = size.uintValue
+      self.fileChecksum = dictionary["fileChecksum"] as? String
+      self.uploadReceipt = dictionary["receipt"] as? String
+      downloaded = false
     }
 }
 
@@ -71,7 +72,9 @@ extension CKAsset: CustomDictionaryConvertible {
         //    fieldDictionary["recordType"] = "Items".bridge()
             fieldDictionary["fieldName"] = recordKey.bridge()
         }
-        
+        fieldDictionary["fileChecksum"] = fileChecksum?.bridge()
+        fieldDictionary["size"] = size?.bridge()
+        fieldDictionary["receipt"] = uploadReceipt?.bridge()
         return fieldDictionary
     }
 }
