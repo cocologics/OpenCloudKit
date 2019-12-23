@@ -46,6 +46,7 @@ public class CKModifySubscriptionsOperation : CKDatabaseOperation {
     override func performCKOperation() {
         
         let subscriptionURLRequest = CKModifySubscriptionsURLRequest(subscriptionsToSave: subscriptionsToSave, subscriptionIDsToDelete: subscriptionIDsToDelete)
+        subscriptionURLRequest.accountInfoProvider = CloudKit.shared.defaultAccount
         subscriptionURLRequest.completionBlock = { [weak self] (result) in
             guard let strongSelf = self, !strongSelf.isCancelled else {
                 return
