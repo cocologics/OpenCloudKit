@@ -46,14 +46,9 @@ class CKPushConnection: NSObject, URLSessionDataDelegate {
                 if let notification = CKNotification.notification(fromRemoteNotificationDictionary: json) {
                     callBack?(notification)
                 }
-                /*
-                if let notification = CKNotification(fromRemoteNotificationDictionary: json) {
-                    callBack?(notification)
-                }
- */
             }
         } catch {
-            
+            CloudKit.debugPrint("Failed serialization. Error: \(error)")
         }
     }
     

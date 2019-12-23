@@ -46,17 +46,13 @@ public struct CKConfig {
     }
     
     public init(contentsOfFile path: String) throws {
-            let url = URL(fileURLWithPath: path)
-            let directory = url.deletingLastPathComponent()
-            
-            let jsonData = try NSData(contentsOfFile: path, options: [])
-            
-            if let dictionary = try JSONSerialization.jsonObject(with: jsonData.bridge(), options: []) as? [String: Any] {
-                self.init(dictionary: dictionary, workingDirectory: directory.path)!
-            } else {
-                throw CKConfigError.InvalidJSON
-            }
-        
+        let url = URL(fileURLWithPath: path)
+        let directory = url.deletingLastPathComponent()
+        guard let jsonData = Data(base64Encoded: path, options: []),
+          let dictionary = try JSONSerialization.jsonObject(with: jsonData, options: []) as? [String: Any] else {
+            throw CKConfigError.InvalidJSON
+        }
+        self.init(dictionary: dictionary, workingDirectory: directory.path)!
     }
 }
 

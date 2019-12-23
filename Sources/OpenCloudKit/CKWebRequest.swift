@@ -157,7 +157,7 @@ class CKWebRequest {
         }
         
         if let serverToServerKeyAuth = serverToServerKeyAuth {
-            if let signedRequest  = CKServerRequestAuth.authenicateServer(forRequest: urlRequest, withServerToServerKeyAuth: serverToServerKeyAuth) {
+            if let signedRequest  = CKServerRequestAuth.authenticateServer(forRequest: urlRequest, withServerToServerKeyAuth: serverToServerKeyAuth) {
                 urlRequest = signedRequest
             }
         }
@@ -217,7 +217,7 @@ class CKWebRequest {
         urlRequest.setValue("application/json; charset=UTF-8", forHTTPHeaderField: "Content-Type")
         
         if let serverToServerKeyAuth = serverToServerKeyAuth {
-            if let signedRequest  = CKServerRequestAuth.authenicateServer(forRequest: urlRequest, withServerToServerKeyAuth: serverToServerKeyAuth) {
+            if let signedRequest  = CKServerRequestAuth.authenticateServer(forRequest: urlRequest, withServerToServerKeyAuth: serverToServerKeyAuth) {
                 urlRequest = signedRequest
             }
         }

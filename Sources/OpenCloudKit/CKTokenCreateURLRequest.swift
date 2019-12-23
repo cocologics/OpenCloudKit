@@ -9,12 +9,8 @@
 import Foundation
 
 class CKTokenCreateURLRequest: CKURLRequest {
-    
     let apnsEnvironment: CKEnvironment
-    
-    override var serverType: CKServerType {
-        return .device
-    }
+    override var serverType: CKServerType { .device }
     
     init(apnsEnvironment: CKEnvironment) {
         self.apnsEnvironment = apnsEnvironment

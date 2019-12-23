@@ -66,7 +66,7 @@ public class CloudKit {
         connection.callBack = {
             (notification) in
 
-            self.delegate?.didRecieveRemoteNotification(notification)
+            self.delegate?.didReceiveRemoteNotification(notification)
         }
         pushConnections.append(connection)
     }

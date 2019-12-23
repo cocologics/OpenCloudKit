@@ -44,7 +44,7 @@ class CKURLRequest: NSObject {
     
     var isFinished: Bool = false
     
-    var requiresSigniture: Bool = false
+    var requiresSignature: Bool = false
     
     var path: String = ""
     
@@ -75,15 +75,18 @@ class CKURLRequest: NSObject {
                 urlRequest.httpBody = jsonData
                 urlRequest.httpMethod = httpMethod
                 urlRequest.addValue(requestContentType, forHTTPHeaderField: "Content-Type")
-                
-                let dataString = NSString(data: jsonData, encoding: String.Encoding.utf8.rawValue)
-            
-                CloudKit.debugPrint(dataString as Any)
+
+                if CloudKit.shared.verbose {
+                  let dataString = NSString(data: jsonData, encoding: String.Encoding.utf8.rawValue)
+                  CloudKit.debugPrint(dataString as Any)
+                }
 
                 if let serverAccount = accountInfoProvider as? CKServerAccount {
                     // Sign Request 
-                    if let signedRequest  = CKServerRequestAuth.authenicateServer(forRequest: urlRequest, withServerToServerKeyAuth: serverAccount.serverToServerAuth) {
+                    if let signedRequest  = CKServerRequestAuth.authenticateServer(forRequest: urlRequest, withServerToServerKeyAuth: serverAccount.serverToServerAuth) {
                         urlRequest = signedRequest
+                    } else {
+                      CloudKit.debugPrint("Failed to sign request with server account")
                     }
                 }
             } else {
