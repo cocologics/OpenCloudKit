@@ -79,20 +79,17 @@ class CKURLRequest: NSObject {
                 let dataString = NSString(data: jsonData, encoding: String.Encoding.utf8.rawValue)
             
                 CloudKit.debugPrint(dataString as Any)
-               
+
                 if let serverAccount = accountInfoProvider as? CKServerAccount {
                     // Sign Request 
                     if let signedRequest  = CKServerRequestAuth.authenicateServer(forRequest: urlRequest, withServerToServerKeyAuth: serverAccount.serverToServerAuth) {
                         urlRequest = signedRequest
                     }
                 }
-            
             } else {
                 urlRequest.httpMethod = httpMethod
-
             }
-          
-        
+
             return urlRequest
         }
     }
@@ -126,12 +123,10 @@ class CKURLRequest: NSObject {
                     .appendingPathComponent(accountInfo.containerInfo.containerID)
                     .appendingPathComponent("\(accountInfo.containerInfo.environment)")
                     .appendingPathComponent("\(operationType)/\(path)").absoluteString
-                
             default:
                 fatalError("Type not supported")
             }
-            
-            
+
           //  var urlComponents = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)!
             switch accountInfo.accountType {
             case .server:
@@ -151,12 +146,8 @@ class CKURLRequest: NSObject {
                    // urlComponents.queryItems?.append(webAuthTokenQueryItem)
                     let encodedWebAuthToken = icloudAuthToken.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)!.replacingOccurrences(of: "+", with: "%2B")
                     baseURL += "&ckWebAuthToken=\(encodedWebAuthToken)"
-                    
                 }
-
-                
             }
-            
             // Perform Encoding
            // urlComponents.percentEncodedQuery = urlComponents.percentEncodedQuery?.replacingOccurrences(of:"+", with: "%2B")
             //CloudKit.debugPrint(urlComponents.url!)

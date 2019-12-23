@@ -18,11 +18,9 @@ class CKTokenCreateURLRequest: CKURLRequest {
     
     init(apnsEnvironment: CKEnvironment) {
         self.apnsEnvironment = apnsEnvironment
-        
         super.init()
         self.operationType = .tokens
         path = "create"
-       // self.serverType = .device
     }
 }
 
@@ -65,7 +63,9 @@ class CKTokenCreateOperation: CKOperation {
     var info : CKPushTokenInfo?
     
     var bodyDictionaryRepresentation: [String: Any] {
-        return ["apnsEnvironment": "\(apnsEnvironment)"]
+        return [
+          "apnsEnvironment": "\(apnsEnvironment)"
+      ]
     }
     
     override func finishOnCallbackQueue(error: Error?) {
@@ -75,7 +75,6 @@ class CKTokenCreateOperation: CKOperation {
     }
     
     override func performCKOperation() {
-        
         let request = CKTokenCreateURLRequest(apnsEnvironment: apnsEnvironment)
         request.accountInfoProvider = CloudKit.shared.defaultAccount
         request.requestProperties = bodyDictionaryRepresentation

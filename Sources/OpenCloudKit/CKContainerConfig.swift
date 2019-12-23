@@ -46,9 +46,7 @@ public struct CKConfig {
     }
     
     public init(contentsOfFile path: String) throws {
-       
             let url = URL(fileURLWithPath: path)
-         
             let directory = url.deletingLastPathComponent()
             
             let jsonData = try NSData(contentsOfFile: path, options: [])
@@ -85,11 +83,7 @@ public struct CKContainerConfig {
     public init(containerIdentifier: String, environment: CKEnvironment, serverToServerKeyAuth: CKServerToServerKeyAuth, apnsEnvironment: CKEnvironment? = nil) {
         self.containerIdentifier = containerIdentifier
         self.environment = environment
-        if let apnsEnvironment = apnsEnvironment {
-            self.apnsEnvironment = apnsEnvironment
-        } else {
-            self.apnsEnvironment = environment
-        }
+        self.apnsEnvironment = apnsEnvironment ?? environment
         self.apiTokenAuth = nil
         self.serverToServerKeyAuth = serverToServerKeyAuth
     }

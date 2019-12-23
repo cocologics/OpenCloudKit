@@ -55,8 +55,6 @@ public class CKModifySubscriptionsOperation : CKDatabaseOperation {
                 
                 if let subscriptionsDictionary = dictionary["subscriptions"] as? [[String: Any]] {
                     // Parse JSON into CKRecords
-                    
-                    
                     for subscriptionDictionary in subscriptionsDictionary {
                         
                         if let subscription = CKSubscription(dictionary: subscriptionDictionary) {

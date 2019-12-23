@@ -55,8 +55,6 @@ class CKPushConnection: NSObject, URLSessionDataDelegate {
         } catch {
             
         }
-        
-        
     }
     
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {

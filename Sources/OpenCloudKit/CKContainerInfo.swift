@@ -9,9 +9,7 @@
 import Foundation
 
 struct CKContainerInfo {
-    
     let environment: CKEnvironment
-    
     let containerID: String
     
     func publicCloudDBURL(databaseScope: CKDatabaseScope) ->  URL {

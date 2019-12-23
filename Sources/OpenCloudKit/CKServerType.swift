@@ -11,7 +11,7 @@ import Foundation
 enum CKServerType: String {
     
     case database = "CKDatabaseService"
-    
+
     case share = "CKShareService"
     
     case device = "CKDeviceService"
