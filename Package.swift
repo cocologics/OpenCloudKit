@@ -9,6 +9,7 @@ import PackageDescription
 
 let package = Package(
     name: "OpenCloudKit",
+    platforms: [.iOS(.v13), .macOS(.v10_12)],
     products: [
         .library(name: "OpenCloudKit", targets: ["OpenCloudKit"]),
     ],
