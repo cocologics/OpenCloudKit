@@ -96,31 +96,34 @@ class CKWebRequest {
         let session = URLSession.shared
        
         let requestCompletionHandler:  (Data?, URLResponse?, Error?) -> Swift.Void = { (data, response, networkError) in
-            if let networkError = networkError {
-                
-              //  let error = self.ckError(forNetworkError: networkError)
-                completionHandler(nil, networkError)
-                
-            } else if let data = data {
-                
-                
-                let dataString = NSString(data: data, encoding: String.Encoding.utf8.rawValue)
-                CloudKit.debugPrint(dataString as Any)
-                let dictionary = try! JSONSerialization.jsonObject(with: data, options: []) as! [String: Any]
-                
-                if let httpResponse = response as? HTTPURLResponse {
-                    if httpResponse.statusCode >= 400 {
-                        // Error Occurred
-                        let error = self.ckError(forServerResponseDictionary: dictionary)
-                        completionHandler(nil, error)
-                        
-                    } else {
-                        completionHandler(dictionary, nil)
-                    }
-                }
-                
+            let httpStatus = (response as? HTTPURLResponse)?.statusCode ?? -1
+            let bodySnippet: String
+            if let data = data {
+                let s = String(data: data, encoding: .utf8) ?? "<non-utf8 \(data.count) bytes>"
+                bodySnippet = s.count > 500 ? String(s.prefix(500)) + "..." : s
+            } else {
+                bodySnippet = "<nil>"
             }
-            
+            CloudKit.debugPrint("[ocd-web] \(request.httpMethod ?? "?") \(request.url?.absoluteString ?? "?") → status=\(httpStatus) error=\(String(describing: networkError)) body=\(bodySnippet)")
+
+            if let networkError = networkError {
+                completionHandler(nil, networkError)
+                return
+            }
+            guard let data = data else {
+                completionHandler(nil, NSError(domain: CKErrorDomain, code: CKErrorCode.InternalError.rawValue, userInfo: [NSLocalizedDescriptionKey: "No data and no error in CKWebRequest response (status \(httpStatus))"]))
+                return
+            }
+            let jsonObject = try? JSONSerialization.jsonObject(with: data, options: [])
+            guard let dictionary = jsonObject as? [String: Any] else {
+                completionHandler(nil, NSError(domain: CKErrorDomain, code: CKErrorCode.InternalError.rawValue, userInfo: [NSLocalizedDescriptionKey: "Response not JSON (status \(httpStatus)): \(bodySnippet)"]))
+                return
+            }
+            if httpStatus >= 400 {
+                completionHandler(nil, self.ckError(forServerResponseDictionary: dictionary))
+            } else {
+                completionHandler(dictionary, nil)
+            }
         }
         let task = session.dataTask(with: request, completionHandler: requestCompletionHandler)
         
@@ -187,6 +190,57 @@ class CKWebRequest {
     }
     
     
+    /// Upload raw binary to a pre-signed CloudKit asset-upload URL.
+    /// The URL already carries signature query params, so we do NOT run it through CKServerRequestAuth.
+    func uploadBinary(to url: URL, body: Data, completion: @escaping ([String: Any]?, Error?) -> Void) -> URLSessionTask? {
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "POST"
+        urlRequest.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
+        urlRequest.setValue("\(body.count)", forHTTPHeaderField: "Content-Length")
+        urlRequest.httpBody = body
+        urlRequest.timeoutInterval = 60
+
+        CloudKit.debugPrint("[ocd-upload] POST \(url.absoluteString) bodyBytes=\(body.count)")
+
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 60
+        config.timeoutIntervalForResource = 120
+        let session = URLSession(configuration: config)
+
+        let task = session.dataTask(with: urlRequest) { data, response, networkError in
+            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+            let bodySnippet: String
+            if let data = data {
+                let s = String(data: data, encoding: .utf8) ?? "<non-utf8 \(data.count) bytes>"
+                bodySnippet = s.count > 500 ? String(s.prefix(500)) + "..." : s
+            } else {
+                bodySnippet = "<nil>"
+            }
+            CloudKit.debugPrint("[ocd-upload] response status=\(status) error=\(String(describing: networkError)) body=\(bodySnippet)")
+
+            if let networkError = networkError {
+                completion(nil, networkError)
+                return
+            }
+            guard let data = data else {
+                completion(nil, NSError(domain: CKErrorDomain, code: CKErrorCode.InternalError.rawValue, userInfo: [NSLocalizedDescriptionKey: "No data in asset upload response (status \(status))"]))
+                return
+            }
+            let object = try? JSONSerialization.jsonObject(with: data, options: [])
+            guard let dictionary = object as? [String: Any] else {
+                completion(nil, NSError(domain: CKErrorDomain, code: CKErrorCode.InternalError.rawValue, userInfo: [NSLocalizedDescriptionKey: "Asset upload response not JSON (status \(status)): \(bodySnippet)"]))
+                return
+            }
+            if status >= 400 {
+                completion(nil, self.ckError(forServerResponseDictionary: dictionary))
+                return
+            }
+            completion(dictionary, nil)
+        }
+        task.resume()
+        return task
+    }
+
     func request(withURL url: String, parameters: [String: Any]?, completetion: @escaping ([String: Any]?, Error?) -> Void) -> URLSessionTask? {
         
         // Build URL

@@ -36,6 +36,7 @@ enum CKRecordOperation: String {
 
 enum CKAssetOperation: String {
     case rereference
+    case upload
 }
 
 enum CKModifyOperation: String {
