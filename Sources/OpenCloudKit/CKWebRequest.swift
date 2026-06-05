@@ -196,9 +196,13 @@ class CKWebRequest {
         var urlRequest = URLRequest(url: url)
         urlRequest.httpMethod = "POST"
         urlRequest.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
-        urlRequest.setValue("\(body.count)", forHTTPHeaderField: "Content-Length")
-        urlRequest.httpBody = body
         urlRequest.timeoutInterval = 60
+        // IMPORTANT: send the body via uploadTask(with:from:), NOT dataTask + httpBody.
+        // On Linux (swift-corelibs-foundation) a large httpBody on a dataTask is not
+        // streamed to the server even though a Content-Length header is sent, so the
+        // server blocks waiting for a body that never arrives and the request times out
+        // (NSURLErrorTimedOut / -1001). uploadTask streams the Data correctly and sets
+        // Content-Length itself.
 
         CloudKit.debugPrint("[ocd-upload] POST \(url.absoluteString) bodyBytes=\(body.count)")
 
@@ -207,7 +211,7 @@ class CKWebRequest {
         config.timeoutIntervalForResource = 120
         let session = URLSession(configuration: config)
 
-        let task = session.dataTask(with: urlRequest) { data, response, networkError in
+        let task = session.uploadTask(with: urlRequest, from: body) { data, response, networkError in
             let status = (response as? HTTPURLResponse)?.statusCode ?? -1
             let bodySnippet: String
             if let data = data {
