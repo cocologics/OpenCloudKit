@@ -16,8 +16,18 @@ let package = Package(
     dependencies: [
         .package(url: cOpenSSLRepo, from: "4.0.1"),
         .package(url: "https://github.com/krzyzanowskim/CryptoSwift.git", from: "1.1.3"),
+        // NIO-based HTTP client used for the binary CKAsset upload to the
+        // pre-signed cws.icloud-content.com URL. Foundation's URLSession on
+        // Linux stalls HTTP/2 uploads past the ~64 KB initial flow-control
+        // window; AsyncHTTPClient honors WINDOW_UPDATE correctly. Already a
+        // transitive dependency of the app, so it resolves cleanly.
+        .package(url: "https://github.com/swift-server/async-http-client.git", from: "1.18.0"),
     ],
     targets: [
-        .target(name: "OpenCloudKit", dependencies: ["COpenSSL", "CryptoSwift",])
+        .target(name: "OpenCloudKit", dependencies: [
+            "COpenSSL",
+            "CryptoSwift",
+            .product(name: "AsyncHTTPClient", package: "async-http-client"),
+        ])
     ]
 )

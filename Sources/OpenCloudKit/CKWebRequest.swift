@@ -12,9 +12,21 @@ import Foundation
 import FoundationNetworking
 #endif
 
+import AsyncHTTPClient
+import NIOCore
+import NIOHTTP1
+
 class CKWebRequest {
 
     var currentWebAuthToken: String?
+
+    /// Process-lifetime HTTP client used *only* for the binary CKAsset upload to
+    /// the pre-signed cws.icloud-content.com URL. AsyncHTTPClient is NIO-based and
+    /// honors HTTP/2 flow-control (WINDOW_UPDATE) correctly, unlike Foundation's
+    /// URLSession on Linux which stalls uploads past the ~64 KB initial window.
+    /// A single shared client avoids spinning up (and leaking) an EventLoopGroup
+    /// per call; it lives for the lifetime of the process and is never shut down.
+    private static let assetUploadHTTPClient = HTTPClient(eventLoopGroupProvider: .createNew)
     
     let containerConfig: CKContainerConfig
     
@@ -192,57 +204,69 @@ class CKWebRequest {
     
     /// Upload raw binary to a pre-signed CloudKit asset-upload URL.
     /// The URL already carries signature query params, so we do NOT run it through CKServerRequestAuth.
+    ///
+    /// Uses AsyncHTTPClient (NIO) rather than Foundation's URLSession: on Linux
+    /// (swift-corelibs-foundation) URLSession does not honor HTTP/2 WINDOW_UPDATE,
+    /// so uploads to the HTTP/2 host cws.icloud-content.com stall right around the
+    /// 64 KB initial flow-control window and time out (NSURLErrorDomain -1001).
+    /// AsyncHTTPClient handles HTTP/2 flow control correctly. The completion-handler
+    /// signature is unchanged; the return value is unused by callers (kept for
+    /// source compatibility), so we return nil.
+    @discardableResult
     func uploadBinary(to url: URL, body: Data, completion: @escaping ([String: Any]?, Error?) -> Void) -> URLSessionTask? {
-        var urlRequest = URLRequest(url: url)
-        urlRequest.httpMethod = "POST"
-        urlRequest.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
-        urlRequest.timeoutInterval = 60
-        // IMPORTANT: send the body via uploadTask(with:from:), NOT dataTask + httpBody.
-        // On Linux (swift-corelibs-foundation) a large httpBody on a dataTask is not
-        // streamed to the server even though a Content-Length header is sent, so the
-        // server blocks waiting for a body that never arrives and the request times out
-        // (NSURLErrorTimedOut / -1001). uploadTask streams the Data correctly and sets
-        // Content-Length itself.
-
         CloudKit.debugPrint("[ocd-upload] POST \(url.absoluteString) bodyBytes=\(body.count)")
 
-        let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 60
-        config.timeoutIntervalForResource = 120
-        let session = URLSession(configuration: config)
+        do {
+            var request = try HTTPClient.Request(url: url.absoluteString, method: .POST)
+            request.headers.add(name: "Content-Type", value: "application/octet-stream")
+            // .bytes sets Content-Length from the byte count and streams the body
+            // honoring HTTP/2 flow control.
+            request.body = .bytes(body)
 
-        let task = session.uploadTask(with: urlRequest, from: body) { data, response, networkError in
-            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
-            let bodySnippet: String
-            if let data = data {
-                let s = String(data: data, encoding: .utf8) ?? "<non-utf8 \(data.count) bytes>"
-                bodySnippet = s.count > 500 ? String(s.prefix(500)) + "..." : s
-            } else {
-                bodySnippet = "<nil>"
-            }
-            CloudKit.debugPrint("[ocd-upload] response status=\(status) error=\(String(describing: networkError)) body=\(bodySnippet)")
+            CKWebRequest.assetUploadHTTPClient
+                .execute(request: request, deadline: .now() + .seconds(120))
+                .whenComplete { result in
+                    switch result {
+                    case .failure(let networkError):
+                        CloudKit.debugPrint("[ocd-upload] response error=\(networkError)")
+                        completion(nil, networkError)
 
-            if let networkError = networkError {
-                completion(nil, networkError)
-                return
-            }
-            guard let data = data else {
-                completion(nil, NSError(domain: CKErrorDomain, code: CKErrorCode.InternalError.rawValue, userInfo: [NSLocalizedDescriptionKey: "No data in asset upload response (status \(status))"]))
-                return
-            }
-            let object = try? JSONSerialization.jsonObject(with: data, options: [])
-            guard let dictionary = object as? [String: Any] else {
-                completion(nil, NSError(domain: CKErrorDomain, code: CKErrorCode.InternalError.rawValue, userInfo: [NSLocalizedDescriptionKey: "Asset upload response not JSON (status \(status)): \(bodySnippet)"]))
-                return
-            }
-            if status >= 400 {
-                completion(nil, self.ckError(forServerResponseDictionary: dictionary))
-                return
-            }
-            completion(dictionary, nil)
+                    case .success(let response):
+                        let status = Int(response.status.code)
+                        let data: Data
+                        if let buffer = response.body, buffer.readableBytes > 0 {
+                            data = Data(buffer.readableBytesView)
+                        } else {
+                            data = Data()
+                        }
+                        let bodySnippet: String = {
+                            let s = String(data: data, encoding: .utf8) ?? "<non-utf8 \(data.count) bytes>"
+                            return s.count > 500 ? String(s.prefix(500)) + "..." : s
+                        }()
+                        CloudKit.debugPrint("[ocd-upload] response status=\(status) body=\(bodySnippet)")
+
+                        guard !data.isEmpty else {
+                            completion(nil, NSError(domain: CKErrorDomain, code: CKErrorCode.InternalError.rawValue, userInfo: [NSLocalizedDescriptionKey: "No data in asset upload response (status \(status))"]))
+                            return
+                        }
+                        let object = try? JSONSerialization.jsonObject(with: data, options: [])
+                        guard let dictionary = object as? [String: Any] else {
+                            completion(nil, NSError(domain: CKErrorDomain, code: CKErrorCode.InternalError.rawValue, userInfo: [NSLocalizedDescriptionKey: "Asset upload response not JSON (status \(status)): \(bodySnippet)"]))
+                            return
+                        }
+                        if status >= 400 {
+                            completion(nil, self.ckError(forServerResponseDictionary: dictionary))
+                            return
+                        }
+                        completion(dictionary, nil)
+                    }
+                }
+        } catch {
+            CloudKit.debugPrint("[ocd-upload] request build error=\(error)")
+            completion(nil, error)
         }
-        task.resume()
-        return task
+
+        return nil
     }
 
     func request(withURL url: String, parameters: [String: Any]?, completetion: @escaping ([String: Any]?, Error?) -> Void) -> URLSessionTask? {
