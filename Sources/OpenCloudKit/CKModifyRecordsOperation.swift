@@ -125,10 +125,12 @@ public class CKModifyRecordsOperation: CKDatabaseOperation {
     public var perRecordCompletionBlock: ((CKRecord?, Error?) -> Swift.Void)?
     
     private var recordErrors: [CKRecordID: Error] = [:]
-    
+
     private var savedRecords: [CKRecord]?
-    
+
     private var deletedRecordIDs: [CKRecordID]?
+
+    private var publishOperation: CKPublishAssetsOperation?
     
     /*  This block is called when the operation completes.
      The [NSOperation completionBlock] will also be called if both are set.
@@ -186,20 +188,67 @@ public class CKModifyRecordsOperation: CKDatabaseOperation {
         
     }
     
-    override func performCKOperation() {
+    private func pendingAssetUploads() -> [CKPublishAssetsOperation.PendingAsset] {
+        guard let records = recordsToSave else { return [] }
+        var pending: [CKPublishAssetsOperation.PendingAsset] = []
+        for record in records {
+            for key in record.allKeys() {
+                if let asset = record[key] as? CKAsset, !asset.uploaded, asset.fileURL.isFileURL {
+                    pending.append(.init(
+                        asset: asset,
+                        recordType: record.recordType,
+                        recordName: record.recordID.recordName,
+                        fieldName: key
+                    ))
+                }
+            }
+        }
+        return pending
+    }
 
+    override func performCKOperation() {
+        let pending = pendingAssetUploads()
+        CloudKit.debugPrint("[ocd-modify] pendingAssetUploads count=\(pending.count)")
+        guard !pending.isEmpty else {
+            performModify()
+            return
+        }
+
+        let publish = CKPublishAssetsOperation(pendingAssets: pending, zoneID: zoneID)
+        publish.database = database
+        publish.container = container
+        publish.publishAssetsCompletionBlock = { [weak self] _, error in
+            guard let strongSelf = self, !strongSelf.isCancelled else { return }
+            CloudKit.debugPrint("[ocd-modify] publish completed error=\(String(describing: error))")
+            strongSelf.publishOperation = nil
+            if let error = error {
+                strongSelf.finish(error: error)
+                return
+            }
+            strongSelf.performModify()
+        }
+        self.publishOperation = publish
+        CloudKit.debugPrint("[ocd-modify] starting publish op")
+        publish.start()
+    }
+
+    private func performModify() {
+        CloudKit.debugPrint("[ocd-modify] performModify starting recordsToSave=\(recordsToSave?.count ?? 0) recordIDsToDelete=\(recordIDsToDelete?.count ?? 0)")
         // Generate the CKOperation Web Service URL
         let request = CKModifyRecordsURLRequest(recordsToSave: recordsToSave, recordIDsToDelete: recordIDsToDelete, isAtomic: isAtomic, database: database!, savePolicy: savePolicy, zoneID: zoneID)
         request.accountInfoProvider = CloudKit.shared.defaultAccount
-        
+
         request.completionBlock = { [weak self] (result) in
-            
+            CloudKit.debugPrint("[ocd-modify] performModify completion fired")
+
             guard let strongSelf = self, !strongSelf.isCancelled else {
+                CloudKit.debugPrint("[ocd-modify] performModify completion: self nil or cancelled")
                 return
             }
-            
+
             switch result {
             case .error(let error):
+                CloudKit.debugPrint("[ocd-modify] performModify error=\(error)")
                 strongSelf.modifyRecordsCompletionBlock?(nil, nil, error.error)
             case .success(let dictionary):
                 
